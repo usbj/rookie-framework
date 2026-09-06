@@ -5,7 +5,7 @@
  * 以及当前用户侧的"我的通知"拉取、标记已读、确认通知。
  */
 import { del, get, getPage, post, put } from '@/utils/http'
-import type { ApiResult } from '@/types/api/system/common'
+import type { ApiResult, PageQueryParams } from '@/types/api/system/common'
 import type {
   SysNoticeGroupListQuery,
   SysNoticeGroupPageResult,
@@ -185,13 +185,26 @@ export const removeNoticeGroupMembersApi = (groupId: number, memberIds: number[]
 
 /**
  * 方法效果：
- * 获取当前登录用户可见的通知列表（含已读/已确认状态与完整正文）。
+ * 分页获取当前登录用户可见的通知列表（含已读/已确认状态与完整正文），
+ * 供头导航通知下拉滚动懒加载使用，请求层完成分页结果归一化。
+ * 参数：
+ * - `params`：分页参数（pageNum / pageSize）。
+ * 返回值：
+ * - 归一化后的分页结果（records / total / pages），后端从 SecurityContextHolder 取当前用户。
+ */
+export const getMyNoticesPageApi = (params: PageQueryParams) =>
+  getPage<SysNoticeRecord>('/sys/notice/my', { params })
+
+/**
+ * 方法效果：
+ * 获取当前登录用户的未读通知数，驱动铃铛徽标。
+ * 懒加载后未读数与已加载分页列表解耦，必须走独立计数接口。
  * 参数：
  * - 无，后端从 SecurityContextHolder 取当前用户。
  * 返回值：
- * - 后端 Result 包裹的通知数组，供头导航通知下拉与详情展示复用。
+ * - 后端 Result 包裹的未读数量。
  */
-export const getMyNoticesApi = () => get<ApiResult<SysNoticeRecord[]>>('/sys/notice/my')
+export const getUnreadCountApi = () => get<ApiResult<number>>('/sys/notice/unread-count')
 
 /**
  * 方法效果：

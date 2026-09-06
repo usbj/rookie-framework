@@ -26,12 +26,15 @@ export const createDefaultMenuForm = (): SysMenuRecord => ({
   menuId: 0,
   menuName: '',
   permKey: '',
-  parentId: 0,
+  // 顶级菜单约定 parentId = -1，与后端 SysMenuServiceImpl.buildMenuTree
+  // 及 sys_menu 表默认值、种子数据保持一致（0 会导致顶级菜单在列表中不展示）。
+  parentId: -1,
   menuType: 2,
   route: '',
   backlinks: 0,
   path: '',
   icon: 'Menu',
+  sort: 0,
   status: 1,
   sonMenus: [],
 })

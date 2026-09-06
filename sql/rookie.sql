@@ -156,6 +156,16 @@ CREATE TABLE `sys_notice_group_rel` (
   KEY `idx_notice_group_rel_notice` (`notice_id`),
   KEY `idx_notice_group_rel_group` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息通知与分组关联表';
+DROP TABLE IF EXISTS `sys_notice_user_rel`;
+CREATE TABLE `sys_notice_user_rel` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '消息指定成员关联主键',
+  `notice_id` bigint NOT NULL COMMENT '消息主键',
+  `user_id` bigint NOT NULL COMMENT '被指定的接收用户主键',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_notice_user_rel` (`notice_id`,`user_id`),
+  KEY `idx_notice_user_rel_notice` (`notice_id`),
+  KEY `idx_notice_user_rel_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息通知与指定成员关联表';
 DROP TABLE IF EXISTS `sys_notice_read`;
 CREATE TABLE `sys_notice_read` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '已读记录主键',
@@ -395,7 +405,8 @@ INSERT INTO `sys_dict_data` VALUES (12,5,'sys_notice_status','已撤回','REVOKE
 INSERT INTO `sys_dict_data` VALUES (13,6,'sys_notice_level','普通','NORMAL','',1,'primary','light','',NULL,'0',1,'2026-06-21 19:10:32','admin','2026-06-22 16:56:32','admin');
 INSERT INTO `sys_dict_data` VALUES (14,6,'sys_notice_level','重要','IMPORTANT','',1,'warning','light','',NULL,'0',1,'2026-06-21 19:11:04','admin','2026-06-22 16:58:16','admin');
 INSERT INTO `sys_dict_data` VALUES (15,7,'sys_notice_scope','全体成员','ALL','',1,'primary','light','',NULL,'0',1,'2026-06-22 15:05:31','admin','2026-06-22 15:05:31','admin');
-INSERT INTO `sys_dict_data` VALUES (16,7,'sys_notice_scope','指定分组','GROUP','',1,'success','light','',NULL,'0',1,'2026-06-22 15:06:19','admin','2026-06-22 15:06:19','admin');
+INSERT INTO `sys_dict_data` VALUES (16,7,'sys_notice_scope','指定分组','GROUP','',2,'success','light','',NULL,'0',1,'2026-06-22 15:06:19','admin','2026-06-22 15:06:19','admin');
+INSERT INTO `sys_dict_data` VALUES (49,7,'sys_notice_scope','指定成员','USER','',3,'danger','light','',NULL,'0',1,'2026-07-13 10:00:00','admin','2026-07-13 10:00:00','admin');
 INSERT INTO `sys_dict_data` VALUES (17,6,'sys_notice_level','紧急','URGENT','',1,'danger','light','',NULL,'0',1,'2026-06-22 16:57:37','admin','2026-06-22 16:57:37','admin');
 INSERT INTO `sys_dict_data` VALUES (18,8,'sys_oper_business_type','其他','OTHER','其他操作',1,'info','light',NULL,NULL,'1',1,'2026-06-27 16:27:09','admin','2026-06-27 16:27:09','admin');
 INSERT INTO `sys_dict_data` VALUES (19,8,'sys_oper_business_type','新增','INSERT','新增操作',2,'success','light',NULL,NULL,'0',1,'2026-06-27 16:27:09','admin','2026-06-27 16:27:09','admin');

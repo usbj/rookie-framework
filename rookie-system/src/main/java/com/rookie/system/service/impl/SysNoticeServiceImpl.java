@@ -9,9 +9,12 @@ import com.rookie.framework.security.pojo.UserInfo;
 import com.rookie.system.mapper.SysNoticeGroupRelMapper;
 import com.rookie.system.mapper.SysNoticeMapper;
 import com.rookie.system.mapper.SysNoticeReadMapper;
+import com.rookie.system.mapper.SysNoticeUserRelMapper;
 import com.rookie.system.pojo.SysNoticeGroupRel;
 import com.rookie.system.pojo.SysNoticeRead;
+import com.rookie.system.pojo.SysNoticeUserRel;
 import com.rookie.system.pojo.quarry.NoticeQuarry;
+import com.rookie.system.pojo.vo.NoticeTargetUserVo;
 import com.rookie.system.pojo.vo.SysNoticeVo;
 import com.rookie.system.service.SysNoticeService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +40,9 @@ public class SysNoticeServiceImpl implements SysNoticeService {
     @Autowired
     SysNoticeReadMapper sysNoticeReadMapper;
 
+    @Autowired
+    SysNoticeUserRelMapper sysNoticeUserRelMapper;
+
     @Override
     public PageInfo<SysNoticeVo> quarrySysNotice(NoticeQuarry quarry) {
         PageUtil.startPage();
@@ -52,6 +58,15 @@ public class SysNoticeServiceImpl implements SysNoticeService {
         List<SysNoticeGroupRel> rels = sysNoticeGroupRelMapper.getSysNoticeGroupRelByNoticeId(noticeId);
         if (rels != null && !rels.isEmpty()) {
             vo.setGroupIds(rels.stream().map(SysNoticeGroupRel::getGroupId).collect(Collectors.toList()));
+        }
+        // 指定成员回显：targetUserIds 用于编辑提交，targetUsers 用于弹窗展示已选成员信息
+        List<SysNoticeUserRel> userRels = sysNoticeUserRelMapper.getSysNoticeUserRelByNoticeId(noticeId);
+        if (userRels != null && !userRels.isEmpty()) {
+            vo.setTargetUserIds(userRels.stream().map(SysNoticeUserRel::getUserId).collect(Collectors.toList()));
+        }
+        List<NoticeTargetUserVo> targetUsers = sysNoticeUserRelMapper.getTargetUsersByNoticeId(noticeId);
+        if (targetUsers != null && !targetUsers.isEmpty()) {
+            vo.setTargetUsers(targetUsers);
         }
         return vo;
     }
@@ -72,6 +87,7 @@ public class SysNoticeServiceImpl implements SysNoticeService {
         }
         vo.setNoticeId(notice.getNoticeId());
         addGroupRelIfNeeded(vo);
+        addTargetUserRelIfNeeded(vo);
         return true;
     }
 
@@ -80,6 +96,8 @@ public class SysNoticeServiceImpl implements SysNoticeService {
     public Boolean editSysNoticeInfo(SysNoticeVo vo) {
         sysNoticeGroupRelMapper.deleteSysNoticeGroupRelByNoticeId(vo.getNoticeId());
         addGroupRelIfNeeded(vo);
+        sysNoticeUserRelMapper.deleteSysNoticeUserRelByNoticeId(vo.getNoticeId());
+        addTargetUserRelIfNeeded(vo);
 
         SysNotice notice = BeanUtil.toBean(vo, SysNotice.class);
         UserInfo userInfo = (UserInfo) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -98,6 +116,7 @@ public class SysNoticeServiceImpl implements SysNoticeService {
         try {
             for (Long id : noticeIds) {
                 sysNoticeGroupRelMapper.deleteSysNoticeGroupRelByNoticeId(id);
+                sysNoticeUserRelMapper.deleteSysNoticeUserRelByNoticeId(id);
                 sysNoticeReadMapper.deleteSysNoticeReadByNoticeId(id);
                 sysNoticeMapper.softDeleteSysNotice(id);
             }
@@ -134,11 +153,17 @@ public class SysNoticeServiceImpl implements SysNoticeService {
         return true;
     }
 
+    /**
+     * 分页获取当前用户可见的通知（按 is_top / publish_time / notice_id 排序），
+     * 每页逐条装配 hasRead / hasConfirmed 后返回 PageInfo。
+     * 分页参数 pageNum / pageSize 由 PageUtil 从请求参数读取（默认 1 / 10）。
+     */
     @Override
-    public List<SysNoticeVo> getMyNotices(Long userId) {
+    public PageInfo<SysNoticeVo> getMyNotices(Long userId) {
+        PageUtil.startPage();
         List<SysNotice> list = sysNoticeMapper.getNoticesForUser(userId);
         if (list == null || list.isEmpty()) {
-            return new ArrayList<>();
+            return new PageInfo<>(new ArrayList<>());
         }
 
         List<SysNoticeRead> reads = sysNoticeReadMapper.getSysNoticeReadByUserId(userId);
@@ -151,12 +176,19 @@ public class SysNoticeServiceImpl implements SysNoticeService {
                 .map(SysNoticeRead::getNoticeId)
                 .collect(Collectors.toSet());
 
-        return list.stream().map(n -> {
-            SysNoticeVo vo = BeanUtil.toBean(n, SysNoticeVo.class);
-            vo.setHasRead(readNoticeIds.contains(n.getNoticeId()));
-            vo.setHasConfirmed(confirmedNoticeIds.contains(n.getNoticeId()));
-            return vo;
-        }).collect(Collectors.toList());
+        PageInfo<SysNotice> page = PageUtil.packagedPageInfo(list);
+        PageInfo<SysNoticeVo> pageInfo = PageUtil.copyPageInfo(page, SysNoticeVo.class);
+        for (SysNoticeVo vo : pageInfo.getList()) {
+            vo.setHasRead(readNoticeIds.contains(vo.getNoticeId()));
+            vo.setHasConfirmed(confirmedNoticeIds.contains(vo.getNoticeId()));
+        }
+        return pageInfo;
+    }
+
+    @Override
+    public Long countUnreadNotices(Long userId) {
+        Long count = sysNoticeMapper.countUnreadNoticesForUser(userId);
+        return count == null ? 0L : count;
     }
 
     @Override
@@ -204,6 +236,25 @@ public class SysNoticeServiceImpl implements SysNoticeService {
             sysNoticeGroupRelMapper.insertSysNoticeGroupRel(rels);
         } catch (Exception e) {
             throw new ServiceException(500, "消息分组关联插入失败", e.getMessage());
+        }
+    }
+
+    /**
+     * 发布范围为"指定成员"(publish_scope=USER) 时，按 vo.targetUserIds 批量写入 sys_notice_user_rel。
+     * 仅在携带了非空 targetUserIds 时生效；全员/分组范围下应由调用方清空该字段，避免脏数据。
+     */
+    private void addTargetUserRelIfNeeded(SysNoticeVo vo) {
+        if (vo.getTargetUserIds() == null || vo.getTargetUserIds().isEmpty()) {
+            return;
+        }
+        List<SysNoticeUserRel> userRels = new ArrayList<>();
+        for (Long userId : vo.getTargetUserIds()) {
+            userRels.add(new SysNoticeUserRel(null, vo.getNoticeId(), userId));
+        }
+        try {
+            sysNoticeUserRelMapper.insertSysNoticeUserRel(userRels);
+        } catch (Exception e) {
+            throw new ServiceException(500, "消息指定成员关联插入失败", e.getMessage());
         }
     }
 }

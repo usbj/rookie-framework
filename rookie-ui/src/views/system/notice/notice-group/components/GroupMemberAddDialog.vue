@@ -9,7 +9,7 @@
  * - `add`：抛出待加入的用户记录，父层维护本地成员集合。
  */
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import {
   ElButton,
   ElDialog,
@@ -24,6 +24,7 @@ import {
 } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { getSysUserPageApi } from '@/api/system/user'
+import { useDialogStack } from '@/composables/useDialogStack'
 import type { SysUserFormData, SysUserPageResult } from '@/types/api/system/user'
 
 const props = defineProps<{
@@ -58,6 +59,58 @@ const userPageState = ref<SysUserPageResult>({
   total: 0,
 })
 
+// ==================== 弹窗栈（栈式互斥） ====================
+// 语义：打开本子弹窗时，当前栈顶弹窗（主弹窗）被自动隐藏；
+// 关闭本子弹窗时，自动恢复主弹窗（弹窗栈负责调用其 show）。
+const dialogStack = useDialogStack()
+const stackKey = Symbol('group-member-add')
+/** 栈隐藏守卫：区分「被栈顶掉（hide）」与「用户关闭」，避免隐藏触发的 close 事件误出栈 */
+let hidingByStack = false
+
+/**
+ * 方法效果：
+ * 仅隐藏子弹窗（被更上层弹窗顶掉时调用）：置 visible=false，保留搜索条件与分页数据。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是隐藏弹窗。
+ */
+const hide = () => {
+  hidingByStack = true
+  visible.value = false
+}
+
+/**
+ * 方法效果：
+ * 仅恢复显示子弹窗（栈恢复上一个时调用）：置 visible=true，不重置搜索条件。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是重新显示弹窗。
+ */
+const show = () => {
+  visible.value = true
+}
+
+// 关闭路径统一处理（v-model 变化必然触发，覆盖完成/X/Esc/遮罩）：
+// - 栈隐藏（hide 触发）：只消费守卫标志，不出栈；
+// - 用户关闭：出栈并自动恢复主弹窗。
+watch(visible, (next) => {
+  if (next) {
+    return
+  }
+  if (hidingByStack) {
+    hidingByStack = false
+    return
+  }
+  dialogStack.close(stackKey)
+})
+
+onBeforeUnmount(() => {
+  // 组件卸载时只出栈不恢复，避免误恢复正在卸载的弹窗
+  dialogStack.remove(stackKey)
+})
+
 /**
  * 方法效果：
  * 按当前搜索条件与分页参数拉取用户候选列表。
@@ -88,7 +141,7 @@ const fetchUserPage = async () => {
 
 /**
  * 方法效果：
- * 打开子弹窗，重置搜索条件并拉取首页用户。
+ * 打开子弹窗：重置搜索条件，注册到弹窗栈（自动隐藏当前栈顶主弹窗）并展示。
  * 参数：
  * - 无。
  * 返回值：
@@ -104,6 +157,7 @@ const open = () => {
     pages: 0,
     total: 0,
   }
+  dialogStack.open({ key: stackKey, hide, show })
   visible.value = true
 }
 
@@ -168,13 +222,6 @@ const handleAdd = (user: SysUserFormData) => {
 const handlePageChange = async () => {
   await fetchUserPage()
 }
-
-watch(visible, (next) => {
-  // 每次重新打开时重置搜索条件并拉取首页用户
-  if (next) {
-    open()
-  }
-})
 
 defineExpose({ open })
 </script>

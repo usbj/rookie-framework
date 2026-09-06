@@ -15,7 +15,7 @@
  * - 保存：标记待移除的原始成员还原成成员记录 id 调 removeMembers，未标记的新增成员调 addMembers。
  */
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   ElButton,
@@ -27,6 +27,7 @@ import {
 } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { addNoticeGroupMembersApi, removeNoticeGroupMembersApi } from '@/api/system/notice'
+import { useDialogStack } from '@/composables/useDialogStack'
 import type { SysNoticeGroupMemberRecord } from '@/types/api/system/notice'
 import type { SysUserFormData } from '@/types/api/system/user'
 import GroupMemberAddDialog from './GroupMemberAddDialog.vue'
@@ -48,6 +49,58 @@ const emit = defineEmits<{
 
 const visible = ref(false)
 const saving = ref(false)
+
+// ==================== 弹窗栈（栈式互斥） ====================
+// 语义：打开"添加成员"子弹窗时本主弹窗被栈隐藏（本地成员改动保留），
+// 子弹窗关闭后自动恢复本主弹窗。
+const dialogStack = useDialogStack()
+const stackKey = Symbol('group-member-transfer')
+/** 栈隐藏守卫：区分「被栈顶掉（hide）」与「用户关闭」，避免隐藏触发的 close 事件误出栈 */
+let hidingByStack = false
+
+/**
+ * 方法效果：
+ * 仅隐藏主弹窗（被子弹窗顶掉时调用）：置 visible=false，不重置本地成员集合。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是隐藏弹窗。
+ */
+const hide = () => {
+  hidingByStack = true
+  visible.value = false
+}
+
+/**
+ * 方法效果：
+ * 仅恢复显示主弹窗（栈恢复上一个时调用）：置 visible=true，不重新初始化本地成员。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是重新显示弹窗。
+ */
+const show = () => {
+  visible.value = true
+}
+
+// 关闭路径统一处理（v-model 变化必然触发，覆盖取消/保存完成/X/Esc/遮罩）：
+// - 栈隐藏（hide 触发）：只消费守卫标志，不出栈；
+// - 用户关闭：出栈，若有上一个弹窗则自动恢复。
+watch(visible, (next) => {
+  if (next) {
+    return
+  }
+  if (hidingByStack) {
+    hidingByStack = false
+    return
+  }
+  dialogStack.close(stackKey)
+})
+
+onBeforeUnmount(() => {
+  // 组件卸载时只出栈不恢复，避免误恢复正在卸载的弹窗
+  dialogStack.remove(stackKey)
+})
 
 // 本地成员集合，打开时拷贝 props.members，增删/标记先在此乐观更新
 const localMembers = ref<LocalMember[]>([])
@@ -96,7 +149,8 @@ const memberIdByUserId = computed(() => {
 
 /**
  * 方法效果：
- * 打开主弹窗，以 props.members 拷贝初始化本地成员集合（pendingRemove 置 false）与原始 userId 集合。
+ * 打开主弹窗，以 props.members 拷贝初始化本地成员集合（pendingRemove 置 false）与原始 userId 集合，
+ * 并注册到弹窗栈（自动隐藏当前栈顶弹窗）。
  * 参数：
  * - 无。
  * 返回值：
@@ -105,6 +159,7 @@ const memberIdByUserId = computed(() => {
 const open = () => {
   localMembers.value = props.members.map((member) => ({ ...member, pendingRemove: false }))
   originalUserIds.value = new Set(props.members.map((member) => Number(member.userId)))
+  dialogStack.open({ key: stackKey, hide, show })
   visible.value = true
 }
 
@@ -220,13 +275,6 @@ const handleSave = async () => {
   }
 }
 
-watch(visible, (next) => {
-  // 每次重新打开时基于最新成员重置本地集合
-  if (next) {
-    open()
-  }
-})
-
 defineExpose({ open })
 </script>
 
@@ -235,9 +283,14 @@ defineExpose({ open })
     v-model="visible"
     title="管理分组成员"
     width="720px"
-    destroy-on-close
     class="group-member-dialog"
   >
+    <!--
+      不使用 destroy-on-close：本弹窗内含「添加成员」子弹窗（GroupMemberAddDialog）组件，
+      若销毁内容，主弹窗被弹窗栈隐藏（visible=false）时子弹窗组件会随之卸载，
+      导致子弹窗打开后瞬间消失（且栈条目被 onBeforeUnmount 移除）。
+      状态重置由 open() 显式完成，不依赖内容销毁。
+    -->
     <!-- 成员表格操作区 -->
     <div class="group-member-toolbar">
       <span class="group-member-toolbar__count">

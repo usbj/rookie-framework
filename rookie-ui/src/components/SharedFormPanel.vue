@@ -12,7 +12,7 @@
  * - `update:modelValue` / `submit` / `cancel`：向页面同步模型和交互动作。
  */
 <script setup lang="ts">
-import { computed, ref, toRaw, useSlots } from 'vue'
+import { computed, onBeforeUnmount, ref, toRaw, useSlots, watch } from 'vue'
 import {
   ElButton,
   ElCol,
@@ -29,6 +29,7 @@ import {
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useDict } from '@/composables/useDict'
+import { useDialogStack } from '@/composables/useDialogStack'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import type { SharedFieldSchemaItem, SharedFieldSchemaMap } from '@/types/components/data-display'
 import { getValueByPath, setValueByPath } from '@/utils/object'
@@ -75,6 +76,71 @@ const emit = defineEmits<{
 const slots = useSlots()
 const formRef = ref<FormInstance>()
 const { resolveDictOptions } = useDict()
+
+// ==================== 弹窗栈（dialog 模式栈式互斥） ====================
+// 语义：打开新弹窗时本弹窗被栈「隐藏」（状态保留），关闭新弹窗后自动恢复本弹窗。
+const dialogStack = useDialogStack()
+const stackKey = Symbol('shared-form-panel-dialog')
+/** 弹窗内部可见性镜像：由 props.visible 同步；hide/show 只操作镜像，不联动父层 visible */
+const innerVisible = ref(props.visible)
+/** 栈隐藏守卫：区分「被栈顶掉（hide）」与「用户关闭」，避免隐藏触发的 close 事件误出栈/误通知父层 */
+let hidingByStack = false
+
+watch(
+  () => props.visible,
+  (next) => {
+    innerVisible.value = next
+  },
+)
+
+watch(innerVisible, (next) => {
+  if (next) {
+    dialogStack.open({ key: stackKey, hide, show })
+    return
+  }
+
+  // 关闭路径统一处理（v-model 变化必然触发，覆盖取消按钮/保存成功/X/Esc/遮罩/父层置 false）：
+  // - 栈隐藏（hide 触发）：只消费守卫标志，不出栈、不通知父层（本弹窗仍是"上一个"）；
+  // - 用户关闭：先出栈恢复上一个弹窗，再通知父层 cancel + update:visible。
+  if (hidingByStack) {
+    hidingByStack = false
+    return
+  }
+  dialogStack.close(stackKey)
+  emit('cancel')
+  emit('update:visible', false)
+})
+
+/**
+ * 方法效果：
+ * 仅隐藏弹窗（被栈顶掉时调用）：置内部可见性为 false，不通知父层、不出栈，
+ * 表单数据（父层 modelValue）与内部状态保留，待栈恢复时重新显示。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是隐藏弹窗。
+ */
+const hide = () => {
+  hidingByStack = true
+  innerVisible.value = false
+}
+
+/**
+ * 方法效果：
+ * 仅恢复显示弹窗（栈恢复上一个时调用）：置内部可见性为 true，不重置任何状态。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是重新显示弹窗。
+ */
+const show = () => {
+  innerVisible.value = true
+}
+
+onBeforeUnmount(() => {
+  // 组件卸载（页面销毁/父层 v-if 移除）时只出栈不恢复，避免误恢复正在卸载的弹窗
+  dialogStack.remove(stackKey)
+})
 
 /**
  * 方法效果：
@@ -216,15 +282,15 @@ const buildDateProps = (fieldConfig: SharedFieldSchemaItem): Record<string, unkn
 
 /**
  * 方法效果：
- * 关闭弹窗模式表单，并向外同步可见状态。
+ * 取消关闭弹窗模式表单：只触发内部可见性关闭，
+ * 由 ElDialog 关闭事件统一 emit `cancel` / `update:visible` 并出栈。
  * 参数：
  * - 无。
  * 返回值：
- * - 无返回值；副作用是触发 `cancel` 和 `update:visible`。
+ * - 无返回值；副作用是关闭弹窗。
  */
 const handleCancel = () => {
-  emit('cancel')
-  emit('update:visible', false)
+  innerVisible.value = false
 }
 
 /**
@@ -256,14 +322,12 @@ const handleSubmit = async () => {
   <!-- 公共表单区域 -->
   <ElDialog
     v-if="mode === 'dialog'"
-    :model-value="visible"
+    v-model="innerVisible"
     :title="dialogTitle"
     :width="dialogWidth"
     top="40px"
     class="shared-form-dialog"
     destroy-on-close
-    @close="handleCancel"
-    @update:model-value="emit('update:visible', $event)"
   >
     <ElForm ref="formRef" class="shared-form-panel__form" :model="modelValue" :rules="mergedRules" :label-width="labelWidth">
       <ElRow :gutter="16">

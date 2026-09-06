@@ -24,6 +24,9 @@ public class SysMenu extends BaseEntity {
 
     private String icon;
 
+    /** 排序号（越小越靠前，同一父级内生效；相同则按 menu_id 兜底） */
+    private Integer sort;
+
     private Integer status;
 
     private Integer delete;
@@ -92,6 +95,14 @@ public class SysMenu extends BaseEntity {
 
     public void setIcon(String icon) {
         this.icon = icon;
+    }
+
+    public Integer getSort() {
+        return sort;
+    }
+
+    public void setSort(Integer sort) {
+        this.sort = sort;
     }
 
     public Integer getStatus() {

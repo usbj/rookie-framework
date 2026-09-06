@@ -28,11 +28,13 @@
         </foreach>
     </select>
 
-    <!-- 查询全部按钮型权限标识（仅启用、未删除的按钮权限），供 admin 直通兜底加载 -->
+    <!-- 查询全部按钮型权限标识（仅启用、未删除的按钮权限），供 admin 直通兜底加载。
+         不限制 perm_key 前缀，任意模块（system: / notice: / log: 等）的按钮权限都会被加载，
+         避免新增非 system: 开头的模块后 admin 丢失权限键。 -->
     <select id="selectAllPermKey" resultType="string">
         select perm_key from sys_menu
         where perm_key is not null and perm_key != ''
-          and perm_key like 'system:%:%'
+          and menu_type = 3
           and status = 1 and `delete` = 0
     </select>
 </mapper>

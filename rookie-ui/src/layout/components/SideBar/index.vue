@@ -127,6 +127,11 @@ const staticEntries = computed<NavigationMenuItem[]>(() => [
   min-height: 0;
 }
 
+/* 侧边栏滚动时隐藏滚动条：内容仍可滚动，仅不显示滚动条轨道/滑块 */
+.side-bar__scroll :deep(.el-scrollbar__bar) {
+  display: none;
+}
+
 .side-bar__nav {
   display: grid;
   gap: 0.625rem;

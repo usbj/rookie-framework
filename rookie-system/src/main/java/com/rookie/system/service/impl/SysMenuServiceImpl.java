@@ -109,6 +109,13 @@ public class SysMenuServiceImpl implements SysMenuService {
         return sysMenuMapper.getSysMenuByMenuIds(menuIds);
     }
 
+    @Override
+    public List<SysMenuVo> getSysMenuAllEnabled() {
+        // 超级管理员菜单树兜底：直接取全部启用且未删除的菜单（含按钮节点），不经 role_menu 授权。
+        // 前端 buttonPermissionKeys 从菜单树提取按钮权限，含按钮节点即可保证 admin 拥有全部按钮权限。
+        return sysMenuMapper.getSysMenuAllEnabled();
+    }
+
     private List<SysMenuVo> buildMenuTree(List<SysMenuVo> sysMenuVos) {
         HashMap<Long,SysMenuVo> hashMap = new HashMap<>();
         for (SysMenuVo sysMenuVo : sysMenuVos) {
@@ -119,6 +126,8 @@ public class SysMenuServiceImpl implements SysMenuService {
         }
         List<SysMenuVo> menuVos = new ArrayList<>();
         for (SysMenuVo sysMenuVo : sysMenuVos) {
+            // 顶级菜单约定 parentId = -1：与 sys_menu 表 parent_id DEFAULT '-1' 及种子数据一致。
+            // 前端菜单管理「上级菜单」选项框中「顶级目录」对应值必须为 -1，否则存盘后该菜单不会进入此顶层列表。
             Long id = sysMenuVo.getParentId();
             if (id == null || id == -1L){
                 menuVos.add(sysMenuVo);
@@ -127,6 +136,10 @@ public class SysMenuServiceImpl implements SysMenuService {
             SysMenuVo parentMenu = hashMap.get(sysMenuVo.getParentId());
             if (parentMenu != null) {
                 parentMenu.getSonMenus().add(sysMenuVo);
+            } else {
+                // 父节点不在当前结果集（如按名称/状态过滤时父节点被滤掉）：作为顶级节点保留，
+                // 避免整棵子树被静默丢弃，导致前端列表"数据消失"
+                menuVos.add(sysMenuVo);
             }
         }
 

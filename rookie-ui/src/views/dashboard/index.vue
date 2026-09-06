@@ -101,7 +101,7 @@ const quickEntries = computed<QuickEntry[]>(() => [
  * 返回值：
  * - 无返回值；副作用是触发路由跳转、页面刷新或登出流程。
  */
-const handleQuickEntry = (entry: QuickEntry) => {
+const handleQuickEntry = async (entry: QuickEntry) => {
   if (entry.action === 'navigate' && entry.route) {
     router.push(entry.route).catch(() => undefined)
     return
@@ -113,7 +113,9 @@ const handleQuickEntry = (entry: QuickEntry) => {
   }
 
   if (entry.action === 'logout') {
-    userStore.logout()
+    // 先等 store 完成本地清理（内部先调后端退出接口）再跳登录页，
+    // 避免路由守卫因 token 尚未清除把用户弹回应用内
+    await userStore.logout()
     router.replace({ path: '/login' })
   }
 }

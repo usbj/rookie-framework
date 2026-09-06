@@ -4,8 +4,6 @@ import com.github.pagehelper.PageInfo;
 import com.rookie.system.pojo.quarry.NoticeQuarry;
 import com.rookie.system.pojo.vo.SysNoticeVo;
 
-import java.util.List;
-
 public interface SysNoticeService {
 
     PageInfo<SysNoticeVo> quarrySysNotice(NoticeQuarry quarry);
@@ -22,7 +20,9 @@ public interface SysNoticeService {
 
     Boolean revokeSysNotice(Long noticeId);
 
-    List<SysNoticeVo> getMyNotices(Long userId);
+    PageInfo<SysNoticeVo> getMyNotices(Long userId);
+
+    Long countUnreadNotices(Long userId);
 
     Boolean markAsRead(Long noticeId, Long userId);
 

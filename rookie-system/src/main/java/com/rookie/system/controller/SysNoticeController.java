@@ -15,8 +15,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @Tag(name = "消息通知", description = "消息通知管理相关接口")
 @RestController
 @RequestMapping("/sys/notice")
@@ -35,7 +33,7 @@ public class SysNoticeController {
 
     @GetMapping("/{noticeId}")
     @Operation(summary = "获取消息通知详情")
-    @PreAuthorize("hasAuthority('system:notice:info')")
+    // 公开接口：游客可访问（公告详情门户场景），放行规则见 SecurityConfig
     public Result<SysNoticeVo> getSysNoticeInfo(@PathVariable Long noticeId) {
         SysNoticeVo vo = sysNoticeService.getSysNoticeInfo(noticeId);
         return Result.success(vo);
@@ -87,11 +85,19 @@ public class SysNoticeController {
     }
 
     @GetMapping("/my")
-    @Operation(summary = "获取当前用户的消息列表")
-    public Result<List<SysNoticeVo>> getMyNotices() {
+    @Operation(summary = "分页获取当前用户的消息列表（pageNum/pageSize 可选，默认 1/10）")
+    public Result<PageInfo<SysNoticeVo>> getMyNotices() {
         UserInfo userInfo = (UserInfo) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        List<SysNoticeVo> list = sysNoticeService.getMyNotices(userInfo.getUserId());
-        return Result.success(list);
+        PageInfo<SysNoticeVo> pageInfo = sysNoticeService.getMyNotices(userInfo.getUserId());
+        return Result.success(pageInfo);
+    }
+
+    @GetMapping("/unread-count")
+    @Operation(summary = "获取当前用户的未读消息数（铃铛徽标专用，独立于分页列表）")
+    public Result<Long> getUnreadCount() {
+        UserInfo userInfo = (UserInfo) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long count = sysNoticeService.countUnreadNotices(userInfo.getUserId());
+        return Result.success(count);
     }
 
     @PostMapping("/read/{noticeId}")

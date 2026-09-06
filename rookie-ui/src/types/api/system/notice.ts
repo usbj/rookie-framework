@@ -6,10 +6,20 @@
  */
 import type { NormalizedPageResult, PageQueryParams } from './common'
 
+/* 通知指定成员回显用的展示信息，与后端 NoticeTargetUserVo 对齐。 */
+export interface NoticeTargetUserRecord {
+  userId: number
+  username?: string
+  nickName?: string
+  phoneNumber?: string
+  status?: number
+}
+
 /**
  * 通知主体记录，与后端 SysNoticeVo 字段对齐。
  * isTop / needConfirm 后端为 Integer，前端统一用 number（0/1）。
- * groupIds 用于发布范围为分组时携带关联分组主键集合。
+ * groupIds 用于发布范围为分组时携带关联分组主键集合；
+ * targetUserIds / targetUsers 用于发布范围为"指定成员"(USER) 时携带目标用户主键与回显展示信息。
  */
 export interface SysNoticeRecord {
   noticeId?: number
@@ -28,6 +38,10 @@ export interface SysNoticeRecord {
   remark?: string
   groupIds?: number[]
   noticeGroups?: Array<{ groupId: number; groupName: string; groupCode: string }>
+  /** 指定成员(USER)范围下携带的目标用户主键数组 */
+  targetUserIds?: number[]
+  /** 详情/编辑回显用：已选指定成员的展示信息（后端 NoticeTargetUserVo 列表） */
+  targetUsers?: NoticeTargetUserRecord[]
   hasRead?: boolean
   hasConfirmed?: boolean
 }

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rookie.system.mapper.SysConfigMapper">
+
+    <resultMap id="SysConfigResultMap" type="com.rookie.common.pojo.entity.SysConfig">
+        <id property="configId" column="config_id"/>
+        <result property="configKey" column="config_key"/>
+        <result property="configName" column="config_name"/>
+        <result property="configValue" column="config_value"/>
+        <result property="valueType" column="value_type"/>
+        <result property="isSystem" column="is_system"/>
+        <result property="remark" column="remark"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="updateBy" column="update_by"/>
+    </resultMap>
+
+    <select id="quarrySysConfig" parameterType="com.rookie.system.pojo.quarry.SysConfigQuarry"
+            resultMap="SysConfigResultMap">
+        select * from sys_config where 1
+        <if test="configKey!=null and configKey!=''">and config_key like concat('%', #{configKey}, '%')</if>
+        <if test="configName!=null and configName!=''">and config_name like concat('%', #{configName}, '%')</if>
+        <if test="status!=null">and status = #{status}</if>
+        order by config_id
+    </select>
+
+    <insert id="addSysConfig" parameterType="com.rookie.common.pojo.entity.SysConfig"
+            useGeneratedKeys="true" keyProperty="configId">
+        insert into sys_config
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="configKey!=null">config_key,</if>
+            <if test="configName!=null">config_name,</if>
+            <if test="configValue!=null">config_value,</if>
+            <if test="valueType!=null">value_type,</if>
+            <if test="isSystem!=null">is_system,</if>
+            <if test="remark!=null">remark,</if>
+            <if test="status!=null">status,</if>
+            create_time, create_by, update_time, update_by
+        </trim>
+        values
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="configKey!=null">#{configKey},</if>
+            <if test="configName!=null">#{configName},</if>
+            <if test="configValue!=null">#{configValue},</if>
+            <if test="valueType!=null">#{valueType},</if>
+            <if test="isSystem!=null">#{isSystem},</if>
+            <if test="remark!=null">#{remark},</if>
+            <if test="status!=null">#{status},</if>
+            now(), #{createBy}, now(), #{updateBy}
+        </trim>
+    </insert>
+
+    <update id="editSysConfig" parameterType="com.rookie.common.pojo.entity.SysConfig">
+        update sys_config
+        set
+        <if test="configKey!=null and configKey!=''">config_key = #{configKey},</if>
+        <if test="configName!=null and configName!=''">config_name = #{configName},</if>
+        <if test="configValue!=null">config_value = #{configValue},</if>
+        <if test="valueType!=null and valueType!=''">value_type = #{valueType},</if>
+        <if test="isSystem!=null">is_system = #{isSystem},</if>
+        <if test="remark!=null">remark = #{remark},</if>
+        <if test="status!=null">status = #{status},</if>
+        update_by = #{updateBy}, update_time = now()
+        where config_id = #{configId}
+    </update>
+
+    <delete id="deleteSysConfigById" parameterType="long">
+        delete from sys_config where config_id = #{configId}
+    </delete>
+
+    <select id="getSysConfigById" parameterType="long" resultMap="SysConfigResultMap">
+        select * from sys_config where config_id = #{configId}
+    </select>
+
+    <select id="getAllSysConfig" resultMap="SysConfigResultMap">
+        select * from sys_config where status = 1
+    </select>
+
+</mapper>

@@ -48,4 +48,29 @@ export const SYSTEM_PERMISSION_KEYS = {
     delete: ['system:errorLog:delete'],
     clean: ['system:errorLog:clean'],
   },
+  systemConfig: {
+    create: ['system:systemConfig:add', 'sys:systemConfig:add'],
+    edit: ['system:systemConfig:edit', 'sys:systemConfig:edit'],
+    delete: ['system:systemConfig:delete', 'sys:systemConfig:delete'],
+    refresh: ['system:systemConfig:refresh', 'sys:systemConfig:refresh'],
+  },
+  online: {
+    quarry: ['system:online:quarry'],
+    kick: ['system:online:kick'],
+  },
+  job: {
+    quarry: ['system:job:quarry'],
+    info: ['system:job:info'],
+    create: ['system:job:add', 'sys:job:add'],
+    edit: ['system:job:edit', 'sys:job:edit'],
+    delete: ['system:job:delete', 'sys:job:delete'],
+    status: ['system:job:status', 'sys:job:status'],
+    run: ['system:job:run', 'sys:job:run'],
+  },
+  jobLog: {
+    quarry: ['system:jobLog:quarry'],
+  },
+  monitor: {
+    quarry: ['system:monitor:quarry'],
+  },
 } as const

@@ -59,6 +59,7 @@ export const createDefaultNoticeForm = (): SysNoticeRecord => ({
   needConfirm: 0,
   remark: '',
   groupIds: [],
+  targetUserIds: [],
 })
 
 /**
@@ -244,13 +245,23 @@ export const createNoticeSchema = (
     visibleWhen: (model) => String(model.publishScope ?? '') === 'GROUP',
     options: groupOptions,
   },
+  targetUserIds: {
+    label: '指定成员',
+    inputType: 'custom',
+    tableVisible: false,
+    formVisible: true,
+    formOrder: 8,
+    span: 24,
+    // 仅在发布范围为"指定成员"时展示，其余范围隐藏
+    visibleWhen: (model) => String(model.publishScope ?? '') === 'USER',
+  },
   content: {
     label: '正文内容',
     inputType: 'markdown',
     placeholder: '请输入通知正文（支持 Markdown）',
     tableVisible: false,
     formVisible: true,
-    formOrder: 8,
+    formOrder: 9,
     span: 24,
   },
   remark: {
@@ -259,7 +270,7 @@ export const createNoticeSchema = (
     placeholder: '请输入备注',
     tableVisible: false,
     formVisible: true,
-    formOrder: 9,
+    formOrder: 10,
     span: 24,
     props: {
       rows: 2,

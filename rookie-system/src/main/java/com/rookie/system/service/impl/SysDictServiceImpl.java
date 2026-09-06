@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -55,6 +56,27 @@ public class SysDictServiceImpl implements SysDictService {
     public SysDictVO getSysDictById(Long dictId) {
         SysDict sysDict = sysDictMapper.getSysDictInfoById(dictId);
         return BeanUtil.toBean(sysDict, SysDictVO.class);
+    }
+
+    @Override
+    public List<SysDictVO> listAllEnabledDict() {
+        // 复用 quarrySysDict 的动态 SQL，传 status=1、其余条件为空，取全部启用字典类型。
+        // 直接调 mapper 不走 PageUtil，避免被分页插件截断为第一页。
+        DictQuarry quarry = new DictQuarry();
+        quarry.setStatus(1);
+        List<SysDict> sysDicts = sysDictMapper.quarrySysDict(quarry);
+        return toDictVoList(sysDicts);
+    }
+
+    private List<SysDictVO> toDictVoList(List<SysDict> sysDicts) {
+        List<SysDictVO> dictVos = new ArrayList<>();
+        if (sysDicts == null || sysDicts.isEmpty()) {
+            return dictVos;
+        }
+        for (SysDict sysDict : sysDicts) {
+            dictVos.add(BeanUtil.toBean(sysDict, SysDictVO.class));
+        }
+        return dictVos;
     }
 
 }

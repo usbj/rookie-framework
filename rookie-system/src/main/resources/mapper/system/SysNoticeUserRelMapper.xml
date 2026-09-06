@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rookie.system.mapper.SysNoticeUserRelMapper">
+
+    <resultMap id="SysNoticeUserRelResultMap" type="com.rookie.system.pojo.SysNoticeUserRel">
+        <id property="id" column="id"/>
+        <result property="noticeId" column="notice_id"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <insert id="insertSysNoticeUserRel" parameterType="com.rookie.system.pojo.SysNoticeUserRel">
+        insert into sys_notice_user_rel(notice_id, user_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.noticeId}, #{item.userId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteSysNoticeUserRelByNoticeId" parameterType="long">
+        delete from sys_notice_user_rel where notice_id = #{noticeId}
+    </delete>
+
+    <select id="getSysNoticeUserRelByNoticeId" parameterType="long" resultMap="SysNoticeUserRelResultMap">
+        select * from sys_notice_user_rel where notice_id = #{noticeId}
+    </select>
+
+    <!-- 关联 sys_user 取展示信息，字段名与 sys_user 一致；sys_user.status 0停用 1启用 -->
+    <select id="getTargetUsersByNoticeId" parameterType="long" resultType="com.rookie.system.pojo.vo.NoticeTargetUserVo">
+        select u.user_id      as userId,
+               u.username     as username,
+               u.nick_name    as nickName,
+               u.phone_number as phoneNumber,
+               u.status       as status
+        from sys_notice_user_rel rel
+        inner join sys_user u on u.user_id = rel.user_id
+        where rel.notice_id = #{noticeId}
+    </select>
+
+</mapper>

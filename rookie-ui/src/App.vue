@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import PageProgressBar from '@/components/PageProgressBar.vue'
+import { pingOnlineApi } from '@/api/system/online'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
+const userStore = useUserStore()
 
 /**
  * 根级页面切换 key。
@@ -11,6 +14,33 @@ const route = useRoute()
  * 同时避免后台内部菜单切换触发整页动画。
  */
 const rootRouteKey = computed(() => route.matched[0]?.path || route.fullPath)
+
+/**
+ * 在线心跳定时器句柄（无登录态时不启动，退出登录由页面跳转离开触发组件卸载清理）。
+ */
+let heartbeatTimer: number | undefined
+
+onMounted(() => {
+  // 在线统计依赖请求活跃时间：用户挂机不操作时没有请求，需定时心跳维持在线状态。
+  // 仅登录后启动；静默请求（失败不弹提示），401 仍会触发登录失效跳转。
+  heartbeatTimer = window.setInterval(async () => {
+    if (!userStore.isAuthenticated) {
+      return
+    }
+    try {
+      await pingOnlineApi()
+    } catch {
+      // 心跳失败静默降级（网络抖动等），下次心跳继续尝试
+    }
+  }, 60_000)
+})
+
+onUnmounted(() => {
+  if (heartbeatTimer !== undefined) {
+    window.clearInterval(heartbeatTimer)
+    heartbeatTimer = undefined
+  }
+})
 </script>
 
 <template>

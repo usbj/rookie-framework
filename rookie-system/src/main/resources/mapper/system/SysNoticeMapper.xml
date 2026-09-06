@@ -114,8 +114,36 @@
                    select rel.notice_id from sys_notice_group_rel rel
                    inner join sys_notice_group_member mem on mem.group_id = rel.group_id
                    where mem.user_id = #{userId}
+               )
+               or notice_id in (
+                   select user_rel.notice_id from sys_notice_user_rel user_rel
+                   where user_rel.user_id = #{userId}
                ))
         order by is_top desc, publish_time desc, notice_id desc
+    </select>
+
+    <!-- 未读计数：可见范围与 getNoticesForUser 一致，未读 = sys_notice_read 无 read_time 记录 -->
+    <select id="countUnreadNoticesForUser" parameterType="long" resultType="long">
+        select count(*)
+        from sys_notice n
+        where n.`delete` = 0
+          and n.status = 'PUBLISHED'
+          and (n.publish_scope = 'ALL'
+               or n.notice_id in (
+                   select rel.notice_id from sys_notice_group_rel rel
+                   inner join sys_notice_group_member mem on mem.group_id = rel.group_id
+                   where mem.user_id = #{userId}
+               )
+               or n.notice_id in (
+                   select user_rel.notice_id from sys_notice_user_rel user_rel
+                   where user_rel.user_id = #{userId}
+               ))
+          and not exists (
+              select 1 from sys_notice_read r
+              where r.notice_id = n.notice_id
+                and r.user_id = #{userId}
+                and r.read_time is not null
+          )
     </select>
 
 </mapper>

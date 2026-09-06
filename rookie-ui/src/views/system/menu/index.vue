@@ -14,6 +14,7 @@ import {
   ElForm,
   ElFormItem,
   ElInput,
+  ElInputNumber,
   ElMessage,
   ElMessageBox,
   ElOption,
@@ -21,6 +22,7 @@ import {
   ElTable,
   ElTableColumn,
   ElTag,
+  ElTooltip,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import {
@@ -102,7 +104,8 @@ const parentMenuOptions = computed(() => {
       ]
     })
 
-  return [{ label: '顶级目录', value: 0 }, ...flattenMenus(menuTree.value)]
+  // 顶级目录用 -1 与后端 buildMenuTree 约定对齐（0 会导致存盘后菜单从列表消失）。
+  return [{ label: '顶级目录', value: -1 }, ...flattenMenus(menuTree.value)]
 })
 
 const canCreateMenu = computed(() => hasPermission(SYSTEM_PERMISSION_KEYS.menu.create))
@@ -134,6 +137,7 @@ const buildMenuListParams = (): SysMenuListQuery => ({
 /**
  * 方法效果：
  * 拉取菜单树列表，并更新当前树表格数据。
+ * 拉取成功后自动展开全部节点（树表格默认折叠会让二级菜单看起来"消失"）。
  * 参数：
  * - 无，直接使用当前页的查询条件。
  * 返回值：
@@ -145,6 +149,8 @@ const fetchMenuList = async () => {
   try {
     const result = await getSysMenuListApi(buildMenuListParams())
     menuTree.value = result.data
+    // 数据刷新后展开全部节点：ElTable 树默认折叠，若保持收起会让人误以为数据丢失
+    expandAllRows()
   } finally {
     listLoading.value = false
   }
@@ -399,16 +405,55 @@ const handleParentChange = (value: number) => {
 const toggleExpandAll = () => {
   expandAll.value = !expandAll.value
 
-  const walkMenus = (menus: SysMenuRecord[]) => {
-    menus.forEach((menu) => {
-      tableRef.value?.toggleRowExpansion(menu, expandAll.value)
-      if (menu.sonMenus?.length) {
-        walkMenus(menu.sonMenus)
-      }
-    })
+  if (expandAll.value) {
+    expandAllRows()
+  } else {
+    collapseAllRows()
   }
+}
 
-  walkMenus(menuTree.value)
+/**
+ * 方法效果：
+ * 展开树表格全部节点（遍历当前菜单树逐行展开）。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是展开所有树节点。
+ */
+const expandAllRows = () => {
+  expandAll.value = true
+  walkMenus(menuTree.value, true)
+}
+
+/**
+ * 方法效果：
+ * 折叠树表格全部节点。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是折叠所有树节点。
+ */
+const collapseAllRows = () => {
+  expandAll.value = false
+  walkMenus(menuTree.value, false)
+}
+
+/**
+ * 方法效果：
+ * 递归对树表格逐行设置展开/折叠状态。
+ * 参数：
+ * - `menus`：当前层菜单节点。
+ * - `expanded`：true 展开 / false 折叠。
+ * 返回值：
+ * - 无返回值；副作用是更新表格行展开状态。
+ */
+const walkMenus = (menus: SysMenuRecord[], expanded: boolean) => {
+  menus.forEach((menu) => {
+    tableRef.value?.toggleRowExpansion(menu, expanded)
+    if (menu.sonMenus?.length) {
+      walkMenus(menu.sonMenus, expanded)
+    }
+  })
 }
 
 /**
@@ -472,41 +517,42 @@ const getMenuActions = (row: SysMenuRecord): MenuRowActionItem[] => {
 
 /**
  * 方法效果：
- * 限制菜单表格操作列直接展示的按钮数量，避免过多按钮挤压排版。
+ * 计算菜单表格操作列直接展示的按钮：仅「编辑」内联展示，
+ * 「新增 / 启停 / 删除」全部放入“更多”下拉，避免操作列挤压排版。
  * 参数：
  * - `row`：当前菜单行数据。
  * 返回值：
  * - 当前行直接展示在表格中的操作按钮数组。
  */
-const getInlineMenuActions = (row: SysMenuRecord) => {
-  const visibleActions = getMenuActions(row)
-
-  if (visibleActions.length <= 3) {
-    return visibleActions
-  }
-
-  return visibleActions.slice(0, 2)
-}
+const getInlineMenuActions = (row: SysMenuRecord) =>
+  getMenuActions(row).filter((action) => action.key === 'edit')
 
 /**
  * 方法效果：
- * 计算菜单表格中需要放入“更多”下拉里的操作按钮。
+ * 计算菜单表格中需要放入“更多”下拉里的操作按钮：新增 / 启停 / 删除。
  * 参数：
  * - `row`：当前菜单行数据。
  * 返回值：
  * - 需要折叠展示的操作按钮数组。
  */
-const getOverflowMenuActions = (row: SysMenuRecord) => {
-  const visibleActions = getMenuActions(row)
+const getOverflowMenuActions = (row: SysMenuRecord) =>
+  getMenuActions(row).filter((action) => action.key !== 'edit')
 
-  if (visibleActions.length <= 3) {
-    return []
+/**
+ * 方法效果：
+ * 单元格展示值统一格式化：空值（null/undefined/空串）显示占位符，其余转字符串并去首尾空白。
+ * 参数：
+ * - `value`：单元格原始值（字符串或数字，如 sort 为数字 0/1）。
+ * 返回值：
+ * - 展示文本；空值返回 '--'。
+ */
+const formatCellValue = (value?: string | number | null): string => {
+  if (value === null || value === undefined || value === '') {
+    return '--'
   }
-
-  return visibleActions.slice(2)
+  const text = String(value).trim()
+  return text ? text : '--'
 }
-
-const formatCellValue = (value?: string) => (value && value.trim() ? value : '--')
 
 onMounted(async () => {
   await Promise.all([ensureDictLoaded('sys_menu_type'), fetchMenuList()])
@@ -570,6 +616,11 @@ onMounted(async () => {
         <ElTableColumn prop="icon" label="图标编码" min-width="130">
           <template #default="{ row }">
             {{ formatCellValue(row.icon) }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn prop="sort" label="排序" width="90" align="center">
+          <template #default="{ row }">
+            {{ formatCellValue(row.sort) }}
           </template>
         </ElTableColumn>
         <ElTableColumn prop="status" label="状态" width="110" align="center">
@@ -669,6 +720,28 @@ onMounted(async () => {
             </ElSelect>
           </ElFormItem>
 
+          <ElFormItem prop="sort">
+            <template #label>
+              <!-- label 容器为 inline-flex（右对齐），两个子项天然横排：
+                   「排序」文本 + 问号说明图标 -->
+              排序
+              <ElTooltip
+                content="同级内按排序值升序展示（越小越靠前，可填负数）"
+                placement="top"
+              >
+                <span class="system-menu-form__sort-help">?</span>
+              </ElTooltip>
+            </template>
+            <ElInputNumber
+              v-model="menuFormModel.sort"
+              :min="-9999"
+              :max="9999"
+              controls-position="right"
+              placeholder="越小越靠前"
+              style="width: 100%"
+            />
+          </ElFormItem>
+
           <ElFormItem label="权限字符" prop="permKey">
             <ElInput
               v-model="menuFormModel.permKey"
@@ -723,6 +796,20 @@ onMounted(async () => {
 .system-menu-view {
   display: grid;
   gap: 18px;
+  /* 允许子项收缩：菜单树列宽总和较大时由表格内部横向滚动，
+     避免内容把整个视图撑开产生页面级水平移动 */
+  min-width: 0;
+}
+
+/* 卡片及其内容区同样允许收缩，保证 ElTable 在卡片宽度内滚动 */
+.system-menu-view :deep(.base-card),
+.system-menu-view :deep(.base-card__body) {
+  min-width: 0;
+}
+
+/* 菜单树表格：固定表格宽度，列宽超出时在表格内部横向滚动 */
+.system-menu-table {
+  width: 100%;
 }
 
 .system-menu-view__toolbar {
@@ -788,6 +875,35 @@ onMounted(async () => {
 .system-menu-form__grid :deep(.el-input),
 .system-menu-form__grid :deep(.el-input__wrapper) {
   width: 100%;
+}
+
+/* 问号说明图标：纯文本实现，宽高固定 18px（输入框 32px 的一半），
+   尺寸完全由 CSS 控制；作为 label 插槽子项与「排序」文本天然横排（label 为 inline-flex），
+   align-self: center 覆盖行内元素的基线对齐，保证与文字垂直居中；
+   悬浮由 ElTooltip 显示说明 */
+.system-menu-form__sort-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--rookie-surface-weak);
+  border: 1px solid var(--rookie-border);
+  color: var(--rookie-text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.system-menu-form__sort-help:hover {
+  border-color: var(--rookie-primary-border);
+  color: var(--rookie-primary-strong);
 }
 
 .system-menu-form__footer {

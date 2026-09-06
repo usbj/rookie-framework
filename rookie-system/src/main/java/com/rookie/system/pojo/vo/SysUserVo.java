@@ -19,6 +19,9 @@ public class SysUserVo {
 
     private String sex;
 
+    /** 头像存储名（上传路径 avatar/ 子目录下的文件名；无头像为 null，前端按 null 显示字母占位） */
+    private String avatar;
+
     private Integer status;
 
     private Date createTime;
@@ -81,6 +84,14 @@ public class SysUserVo {
 
     public void setSex(String sex) {
         this.sex = sex;
+    }
+
+    public String getAvatar() {
+        return avatar;
+    }
+
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
     }
 
     public Integer getStatus() {

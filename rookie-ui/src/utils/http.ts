@@ -13,6 +13,16 @@ import type {
   RawPageInfoResult,
 } from '@/types/api/system/common'
 
+/**
+ * 自定义请求配置扩展：`silent: true` 时业务错误不弹 ElMessage（心跳等高频静默请求用），
+ * 401 登录失效跳转逻辑不受影响。通过模块扩展挂到 axios 配置类型上，请求方法可直接传入。
+ */
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silent?: boolean
+  }
+}
+
 const SUCCESS_CODE = 200
 const AUTH_EXPIRED_CODE = 401
 const DICT_CACHE_STORAGE_KEY = 'rookie-dict-cache'
@@ -81,29 +91,43 @@ http.interceptors.request.use((config) => {
 })
 
 /**
+ * 方法效果：
  * 统一处理后端 Result 结构中的业务错误和网络错误。
  * 成功时仍返回完整响应体，交给各 API 方法按自身类型消费。
+ * 说明：
+ * - `silent` 请求配置（自定义扩展字段）为 true 时，业务错误不弹 ElMessage，
+ *   供心跳等高频静默请求使用；401 登录失效跳转逻辑不受影响。
  */
 http.interceptors.response.use(
   (response: AxiosResponse<ApiResult<unknown>>) => {
     const payload = response.data
 
     if (typeof payload?.code === 'number' && payload.code !== SUCCESS_CODE) {
+      const silent = Boolean(response.config.silent)
+
       if (payload.code === AUTH_EXPIRED_CODE) {
-        ElMessage.error(payload.msg || '登录状态已失效，请重新登录')
+        if (!silent) {
+          ElMessage.error(payload.msg || '登录状态已失效，请重新登录')
+        }
         redirectToLogin()
         return Promise.reject(new Error(payload.msg || '登录状态已失效'))
       }
 
-      ElMessage.error(payload.msg || '请求失败')
+      if (!silent) {
+        ElMessage.error(payload.msg || '请求失败')
+      }
       return Promise.reject(new Error(payload.msg || '请求失败'))
     }
 
     return response
   },
   (error: AxiosError) => {
+    const silent = Boolean(error.config?.silent)
+
     if (error.response?.status === AUTH_EXPIRED_CODE) {
-      ElMessage.error('登录状态已失效，请重新登录')
+      if (!silent) {
+        ElMessage.error('登录状态已失效，请重新登录')
+      }
       redirectToLogin()
       return Promise.reject(error)
     }
@@ -113,7 +137,9 @@ http.interceptors.response.use(
         ? String(error.response.data.msg)
         : error.message || '网络请求异常'
 
-    ElMessage.error(message)
+    if (!silent) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   },
 )
@@ -154,6 +180,28 @@ export const get = <T>(url: string, config?: AxiosRequestConfig) =>
     method: 'get',
     url,
   })
+
+/**
+ * 方法效果：
+ * 以二进制流（blob）方式发起 GET 请求，用于文件下载与图片读取。
+ * 参数：
+ * - `url`：接口地址。
+ * - `config`：可选 Axios 配置。
+ * 返回值：
+ * - 二进制数据（Blob）。
+ * 说明：
+ * - `<img>` 标签无法携带 Token 请求头，头像等图片需先用本方法取 blob 再转 objectURL 展示；
+ * - 响应拦截器对 blob 不生效（Blob 无 code 字段），业务错误码由错误分支统一提示。
+ */
+export const getBlob = async <T = Blob>(url: string, config?: AxiosRequestConfig) => {
+  const response = await http.request<T>({
+    ...config,
+    method: 'get',
+    url,
+    responseType: 'blob',
+  })
+  return response.data
+}
 
 export const post = <T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>) =>
   request<T>({
