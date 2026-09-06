@@ -16,6 +16,8 @@ export interface SysMenuRecord {
   backlinks: number
   path: string
   icon: string
+  /** 排序号（越小越靠前，同一父级内生效；相同则按 menuId 兜底） */
+  sort?: number
   status: number
   createTime?: string
   sonMenus: SysMenuRecord[]

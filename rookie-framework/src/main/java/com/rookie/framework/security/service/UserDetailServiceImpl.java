@@ -35,10 +35,11 @@ public class UserDetailServiceImpl implements UserDetailsService {
         // 不再依赖 sys_role_menu 逐菜单授权，避免新增菜单后忘记给 admin 授权导致无法访问；
         // 其余角色走"角色 → 已启用角色的 menuId → perm_key"的常规链路。
         ArrayList<String> permKeyById;
+        boolean isAdmin;
         try {
             ArrayList<SysRole> roles = userInfoMapper.selectRoleByUserId(userInfo.getUserId());
             //判断当前用户是否拥有超级管理员角色（roleKey == "admin"）
-            boolean isAdmin = roles != null && roles.stream()
+            isAdmin = roles != null && roles.stream()
                     .anyMatch(sysRole -> sysRole.getStatus() != 0 && "admin".equals(sysRole.getRoleKey()));
             if (isAdmin) {
                 //admin 直通：加载全部按钮权限，忽略具体角色-菜单授权
@@ -60,6 +61,8 @@ public class UserDetailServiceImpl implements UserDetailsService {
             //将用户权限的标识符转换为permission对象
             List<Permission> list = permKeyById.stream().filter(Objects::nonNull).map(Permission::new).toList();
             userInfo.setPermissions(list);
+            //记录 admin 标记，供自定义鉴权层短路放行所有 @PreAuthorize（不依赖缓存的权限快照）
+            userInfo.setAdmin(isAdmin);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -89,6 +89,14 @@ public class SysDictDataServiceImpl implements SysDictDataService {
         return toDictDataVoList(sysDictDataByDictKey);
     }
 
+    @Override
+    public Boolean clearDictDataCache() {
+        // 清空 Redis 中全部 sys_dict_name:* 缓存键，下次按 dictKey 取值会重新查库并回填缓存。
+        // 解决"接口读旧缓存、DB 已更新"的不一致：见 SysDictDataController 顶部 TODO。
+        DictUtil.clearDictData();
+        return true;
+    }
+
     private SysDictData toDictDataEntity(SysDictDataVo dictDataVo) {
         return BeanUtil.toBean(dictDataVo, SysDictData.class);
     }

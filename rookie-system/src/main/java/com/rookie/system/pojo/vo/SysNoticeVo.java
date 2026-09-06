@@ -40,6 +40,17 @@ public class SysNoticeVo {
 
     private List<SysNoticeGroup> noticeGroups;
 
+    /**
+     * 发布范围为"指定成员"(publish_scope=USER)时携带的目标用户主键集合，提交时使用。
+     */
+    private List<Long> targetUserIds;
+
+    /**
+     * 详情回显用：按 sys_notice_user_rel 关联 sys_user 查出的目标用户展示信息，
+     * 供编辑弹窗回显已选成员的昵称/用户名等。
+     */
+    private List<NoticeTargetUserVo> targetUsers;
+
     private Boolean hasRead;
 
     private Boolean hasConfirmed;
@@ -181,6 +192,22 @@ public class SysNoticeVo {
 
     public void setNoticeGroups(List<SysNoticeGroup> noticeGroups) {
         this.noticeGroups = noticeGroups;
+    }
+
+    public List<Long> getTargetUserIds() {
+        return targetUserIds;
+    }
+
+    public void setTargetUserIds(List<Long> targetUserIds) {
+        this.targetUserIds = targetUserIds;
+    }
+
+    public List<NoticeTargetUserVo> getTargetUsers() {
+        return targetUsers;
+    }
+
+    public void setTargetUsers(List<NoticeTargetUserVo> targetUsers) {
+        this.targetUsers = targetUsers;
     }
 
     public Boolean getHasRead() {

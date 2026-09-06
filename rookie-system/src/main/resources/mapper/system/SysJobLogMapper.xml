@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rookie.system.mapper.SysJobLogMapper">
+
+    <resultMap id="sysJobLogEntity" type="com.rookie.common.pojo.entity.SysJobLog">
+        <id property="logId" column="log_id"/>
+        <result property="jobId" column="job_id"/>
+        <result property="jobName" column="job_name"/>
+        <result property="triggerType" column="trigger_type"/>
+        <result property="invokeTarget" column="invoke_target"/>
+        <result property="jobParams" column="job_params"/>
+        <result property="status" column="status"/>
+        <result property="costTime" column="cost_time"/>
+        <result property="exceptionMsg" column="exception_msg"/>
+        <result property="executeTime" column="execute_time"/>
+    </resultMap>
+
+    <select id="quarrySysJobLog" parameterType="com.rookie.system.pojo.quarry.SysJobLogQuarry" resultMap="sysJobLogEntity">
+        select * from sys_job_log
+        <where>
+            <if test="jobId != null">
+                and job_id = #{jobId}
+            </if>
+            <if test="jobName != null and jobName != ''">
+                and job_name like concat('%', #{jobName}, '%')
+            </if>
+            <if test="triggerType != null and triggerType != ''">
+                and trigger_type = #{triggerType}
+            </if>
+            <if test="status != null">
+                and status = #{status}
+            </if>
+            <if test="beginTime != null and beginTime != ''">
+                and date_format(execute_time,'%Y%m%d') &gt;= date_format(#{beginTime},'%Y%m%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                and date_format(execute_time,'%Y%m%d') &lt;= date_format(#{endTime},'%Y%m%d')
+            </if>
+        </where>
+        order by execute_time desc
+    </select>
+
+    <insert id="addSysJobLog" parameterType="com.rookie.common.pojo.entity.SysJobLog">
+        insert into sys_job_log
+        (job_id, job_name, trigger_type, invoke_target, job_params, status, cost_time, exception_msg, execute_time)
+        values
+        (#{jobId}, #{jobName}, #{triggerType}, #{invokeTarget}, #{jobParams}, #{status}, #{costTime}, #{exceptionMsg}, #{executeTime})
+    </insert>
+
+    <delete id="deleteSysJobLogByJobId" parameterType="long">
+        delete from sys_job_log where job_id = #{jobId}
+    </delete>
+
+</mapper>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   ArrowLeftBold,
   ArrowRightBold,
@@ -14,6 +14,7 @@ import {
   Sunny,
 } from '@element-plus/icons-vue'
 import { ElBadge, ElDropdown, ElDropdownItem, ElDropdownMenu } from 'element-plus'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useUserStore } from '@/stores/user'
 import { useLayoutNavigationStore } from '@/stores/navigation'
 import { useThemePreferenceStore } from '@/stores/themePreference'
@@ -91,6 +92,96 @@ const notifications = computed<NotificationItem[]>(() =>
 const unreadNotificationCount = computed(() => noticeStore.unreadCount)
 
 /**
+ * 通知下拉滚动容器选择器。
+ * EP 2.14 的 ElDropdown 内部用 ElScrollbar 包裹内容，真正的滚动容器是
+ * `.el-scrollbar__wrap`（由 ElDropdown 的 max-height prop 驱动产生滚动），
+ * 滚动监听需要挂在它上面，而不是内层的 `.el-dropdown-menu`。
+ */
+const NOTICE_MENU_SELECTOR = '.nav-bar-notice-dropdown .el-scrollbar__wrap'
+
+/**
+ * 方法效果：
+ * 通知下拉滚动到接近底部时触发下一页懒加载。
+ * 参数：
+ * - `event`：菜单容器的滚动事件。
+ * 返回值：
+ * - 无返回值；副作用是按需追加通知列表。
+ */
+const handleNoticeMenuScroll = (event: Event) => {
+  const el = event.currentTarget as HTMLElement
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) {
+    noticeStore.loadMoreNotices().catch(() => undefined)
+  }
+}
+
+/**
+ * 方法效果：
+ * 下拉打开期间补页直到菜单可滚动：首屏 10 条在 60vh 内往往放得下，
+ * 菜单没有滚动条时滚轮无处可滚、懒加载触发不了，这里自动加载下一页，
+ * 直到内容溢出可滚动或没有更多为止（之后交给用户滚动触发）。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 无返回值；副作用是按需追加通知列表。
+ */
+const ensureNoticeMenuScrollable = async () => {
+  const menu = document.querySelector<HTMLElement>(NOTICE_MENU_SELECTOR)
+  if (!menu || !noticeStore.hasMore || noticeStore.loadingMore) {
+    return
+  }
+  if (menu.scrollHeight - menu.clientHeight <= 2) {
+    try {
+      await noticeStore.loadMoreNotices()
+    } catch {
+      // 补页失败时停止自动补页，滚动/重新打开时会重试
+      return
+    }
+    await ensureNoticeMenuScrollable()
+  }
+}
+
+/** 通知下拉当前是否显示，控制列表变化后的自动补页只在打开期间生效 */
+const isNoticeDropdownVisible = ref(false)
+
+/**
+ * 方法效果：
+ * 通知下拉显示时拉取首屏列表并刷新未读数（已加载则只刷未读数），
+ * 在菜单容器上挂载滚动懒加载监听并尝试自动补页；隐藏时卸载监听。
+ * 参数：
+ * - `visible`：下拉是否显示。
+ * 返回值：
+ * - 无返回值；副作用是更新通知状态与滚动监听。
+ */
+const handleNoticeDropdownVisible = (visible: boolean) => {
+  isNoticeDropdownVisible.value = visible
+  if (visible) {
+    noticeStore.fetchMyNotices().catch(() => undefined)
+    noticeStore.fetchUnreadCount().catch(() => undefined)
+    // popper 挂载到 body 后再找菜单容器，避免取到未渲染节点
+    nextTick(() => {
+      document.querySelector<HTMLElement>(NOTICE_MENU_SELECTOR)?.addEventListener('scroll', handleNoticeMenuScroll)
+      void ensureNoticeMenuScrollable()
+    })
+  } else {
+    document.querySelector<HTMLElement>(NOTICE_MENU_SELECTOR)?.removeEventListener('scroll', handleNoticeMenuScroll)
+  }
+}
+
+// 首屏数据返回 / 自动补页追加后重新检查：下拉仍打开且内容仍不满一屏则继续补页
+watch(
+  [() => noticeStore.myNotices.length, () => noticeStore.loadingMore],
+  () => {
+    if (isNoticeDropdownVisible.value) {
+      nextTick(() => void ensureNoticeMenuScrollable())
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  document.querySelector<HTMLElement>(NOTICE_MENU_SELECTOR)?.removeEventListener('scroll', handleNoticeMenuScroll)
+})
+
+/**
  * 关闭标签后，如果关掉的是当前页，就自动切到相邻标签，
  * 这样顶部标签栏和主内容区不会出现“当前页面还开着但标签没了”的断裂状态。
  */
@@ -146,7 +237,9 @@ const handleProfileCommand = async (command: string) => {
   }
 
   if (command === 'logout') {
-    userStore.logout()
+    // 先等 store 完成本地清理（内部先调后端退出接口）再跳登录页，
+    // 否则路由守卫可能因 token 尚未清除把用户弹回应用内
+    await userStore.logout()
     layoutNavigationStore.resetNavigationState()
     unregisterDynamicRoutes(router)
     await router.replace('/login')
@@ -189,6 +282,8 @@ const handleProfileCommand = async (command: string) => {
           placement="bottom-end"
           popper-class="nav-bar-notice-dropdown"
           :show-arrow="false"
+          max-height="60vh"
+          @visible-change="handleNoticeDropdownVisible"
         >
           <button class="nav-bar__icon-button" type="button" aria-label="通知">
             <ElBadge :value="unreadNotificationCount" :hidden="unreadNotificationCount === 0">
@@ -199,7 +294,8 @@ const handleProfileCommand = async (command: string) => {
           <template #dropdown>
             <ElDropdownMenu class="nav-bar__notice-menu">
               <div class="nav-bar__notice-head">通知</div>
-              <div v-if="notifications.length === 0" class="nav-bar__notice-empty">暂无通知</div>
+              <div v-if="!noticeStore.loaded" class="nav-bar__notice-empty">加载中…</div>
+              <div v-else-if="notifications.length === 0" class="nav-bar__notice-empty">暂无通知</div>
               <ElDropdownItem
                 v-for="item in notifications"
                 :key="item.id"
@@ -216,6 +312,9 @@ const handleProfileCommand = async (command: string) => {
                   <small>{{ item.time }}</small>
                 </div>
               </ElDropdownItem>
+              <div v-if="notifications.length > 0" class="nav-bar__notice-loading">
+                {{ noticeStore.loadingMore ? '加载中…' : noticeStore.hasMore ? '继续滚动加载更多' : '已加载全部' }}
+              </div>
             </ElDropdownMenu>
           </template>
         </ElDropdown>
@@ -232,7 +331,10 @@ const handleProfileCommand = async (command: string) => {
         >
           <button class="nav-bar__profile" type="button" aria-label="当前用户菜单">
             <span class="nav-bar__profile-avatar">
-              {{ userStore.displayName.slice(0, 1).toUpperCase() }}
+              <UserAvatar
+                :name="userStore.displayName"
+                :src="userStore.avatarUrl ?? undefined"
+              />
             </span>
             <span class="nav-bar__profile-copy">
               <strong>{{ userStore.displayName }}</strong>
@@ -428,10 +530,8 @@ const handleProfileCommand = async (command: string) => {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--rookie-avatar-bg);
-  color: var(--rookie-primary-strong);
-  font-weight: 700;
   flex: none;
+  overflow: hidden;
 }
 
 .nav-bar__profile-copy {
@@ -495,6 +595,13 @@ const handleProfileCommand = async (command: string) => {
   font-size: var(--rookie-font-size-sm);
 }
 
+.nav-bar__notice-loading {
+  padding: 10px 14px;
+  color: var(--rookie-text-tertiary);
+  font-size: var(--rookie-font-size-xs);
+  text-align: center;
+}
+
 .nav-bar__notice-copy {
   display: grid;
   gap: 4px;
@@ -556,5 +663,20 @@ const handleProfileCommand = async (command: string) => {
 .nav-bar-notice-dropdown .el-dropdown-menu__item:not(:hover):not(:focus) {
   background-color: transparent !important;
   color: var(--el-text-color-regular) !important;
+}
+
+/*
+ * 通知下拉滚动：滚动容器是 ElDropdown 的 max-height prop 驱动的
+ * `.el-scrollbar__wrap`（EP 原生滚动机制，自带滚动条），
+ * 不能再给内层 `.el-dropdown-menu` 加 max-height/overflow，
+ * 否则形成双层滚动容器、滚轮事件被外层吞掉、内层滚不动。
+ */
+
+/* 通知头部「通知」标题在滚动时吸顶（背景与 popper 同色，盖住滚过的内容） */
+.nav-bar-notice-dropdown .nav-bar__notice-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--el-bg-color-overlay);
 }
 </style>

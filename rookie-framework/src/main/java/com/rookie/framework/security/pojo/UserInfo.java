@@ -22,7 +22,20 @@ public class UserInfo implements UserDetails {
 
     private Long expireTime;
 
+    /** 登录 IP（登录时从请求头解析，随 UserInfo 缓存进 Redis，供在线用户列表展示） */
+    private String loginIp;
+
     private List<Permission> permissions;
+
+    /**
+     * 是否超级管理员标记（角色 roleKey == "admin" 时为 true）。
+     * <p>
+     * 由 {@code UserDetailServiceImpl} 在加载用户时设置，随 UserInfo 一起缓存进 Redis。
+     * 鉴权层（自定义 MethodSecurityExpressionHandler）据此短路放行所有 @PreAuthorize，
+     * 让 admin 不依赖缓存的权限快照即可访问任意权限，新建菜单/权限后无需更新缓存、无需改角色授权。
+     * 该标记只随 admin 角色的授予/撤销变化，不随菜单增删变化，故无缓存陈旧问题。
+     */
+    private boolean admin;
 
     public Long getUserId() {
         return userId;
@@ -72,12 +85,28 @@ public class UserInfo implements UserDetails {
         this.expireTime = expireTime;
     }
 
+    public String getLoginIp() {
+        return loginIp;
+    }
+
+    public void setLoginIp(String loginIp) {
+        this.loginIp = loginIp;
+    }
+
     public List<Permission> getPermissions() {
         return permissions;
     }
 
     public void setPermissions(List<Permission> permissions) {
         this.permissions = permissions;
+    }
+
+    public boolean isAdmin() {
+        return admin;
+    }
+
+    public void setAdmin(boolean admin) {
+        this.admin = admin;
     }
 
     @Override
@@ -88,6 +117,8 @@ public class UserInfo implements UserDetails {
                 ", password='" + password + '\'' +
                 ", nickName='" + nickName + '\'' +
                 ", status=" + status +
+                ", admin=" + admin +
+                ", loginIp='" + loginIp + '\'' +
                 ", permissions=" + permissions +
                 '}';
     }

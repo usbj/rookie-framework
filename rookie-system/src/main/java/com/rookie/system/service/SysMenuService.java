@@ -23,4 +23,10 @@ public interface SysMenuService {
 
     List<SysMenuVo> getSysMenuByRoleList(List<SysRole> roles);
 
+    /**
+     * 查询全部启用菜单（目录/菜单/按钮均含），供超级管理员菜单树兜底。
+     * admin 不经 role_menu 逐菜单授权，直接拿全部启用菜单，避免新增菜单后忘记给 admin 角色授权导致看不到。
+     */
+    List<SysMenuVo> getSysMenuAllEnabled();
+
 }

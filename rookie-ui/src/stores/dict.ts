@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getSysDictDataByTypeApi, getSysDictPageApi } from '@/api/system/dict'
+import { getSysDictAllApi, getSysDictDataByTypeApi } from '@/api/system/dict'
 import type { SysDictDataRecord } from '@/types/api/system/dict'
 
 export const DICT_CACHE_STORAGE_KEY = 'rookie-dict-cache'
@@ -226,7 +226,9 @@ export const useDictStore = defineStore('dict', () => {
 
   /**
    * 方法效果：
-   * 登录后预加载全部字典定义对应的数据项，供全局页面直接消费。
+   * 登录后预加载全部启用字典类型对应的数据项，供全局页面直接消费。
+   * 走无权限的 GET /sys/dict/all 拿字典类型列表（让没有字典管理权限的普通用户也能用字典功能），
+   * 再逐个按 dictKey 调 GET /sys/dist/data/type/{dictKey} 拉数据项。
    * 参数：
    * - `force`：是否强制重新拉取所有字典。
    * 返回值：
@@ -240,15 +242,11 @@ export const useDictStore = defineStore('dict', () => {
     loading.value = true
 
     try {
-      const result = await getSysDictPageApi({
-        pageNum: 1,
-        pageSize: 500,
-        status: 1,
-      })
+      const result = await getSysDictAllApi()
 
       const dictKeys = Array.from(
         new Set(
-          result.records
+          (result.data ?? [])
             .map((item) => item.dictKey?.trim())
             .filter((item): item is string => Boolean(item)),
         ),

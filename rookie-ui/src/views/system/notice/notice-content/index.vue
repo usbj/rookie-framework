@@ -11,7 +11,7 @@
  */
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus'
+import { ElMessage, ElMessageBox, ElSelect, ElOption, ElTag, ElButton, ElEmpty } from 'element-plus'
 import {
   createSysNoticeApi,
   deleteSysNoticesApi,
@@ -26,9 +26,16 @@ import BaseCard from '@/components/BaseCard.vue'
 import SearchFilterPanel from '@/components/SearchFilterPanel.vue'
 import SharedTablePanel from '@/components/SharedTablePanel.vue'
 import NoticeDetailDialog from '@/components/NoticeDetailDialog.vue'
+import GroupMemberAddDialog from '../notice-group/components/GroupMemberAddDialog.vue'
 import { SYSTEM_PERMISSION_KEYS } from '@/constants/systemPermissions'
 import type { NormalizedPageResult } from '@/types/api/system/common'
-import type { SysNoticeListQuery, SysNoticePageResult, SysNoticeRecord } from '@/types/api/system/notice'
+import type {
+  NoticeTargetUserRecord,
+  SysNoticeListQuery,
+  SysNoticePageResult,
+  SysNoticeRecord,
+} from '@/types/api/system/notice'
+import type { SysUserFormData } from '@/types/api/system/user'
 import type { SharedActionConfig, SharedFieldSchemaMap } from '@/types/components/data-display'
 import {
   createDefaultNoticeForm,
@@ -50,6 +57,14 @@ const dialogMode = ref<NoticeDialogMode>('create')
 const formModel = ref<SysNoticeRecord>(createDefaultNoticeForm())
 const detailVisible = ref(false)
 const detailRecord = ref<SysNoticeRecord | null>(null)
+/**
+ * 指定成员本地维护集合：作为 USER 范围下的单一真源，保存已选成员的展示信息。
+ * 提交时由它派生 targetUserIds；编辑回显时由后端 targetUsers 初始化。
+ * 与 groupIds 走后端回显不同，这里本地维护是为了在弹窗内即时展示昵称/用户名、
+ * 并复用 GroupMemberAddDialog 的"搜索+加入"交互而无需另起新接口。
+ */
+const targetMembers = ref<NoticeTargetUserRecord[]>([])
+const targetUserAddDialog = ref<InstanceType<typeof GroupMemberAddDialog> | null>(null)
 const pageState = ref<SysNoticePageResult>({
   records: [],
   pageNum: 1,
@@ -232,6 +247,7 @@ const resetQueryForm = async () => {
 const openCreateDialog = () => {
   dialogMode.value = 'create'
   formModel.value = createDefaultNoticeForm()
+  targetMembers.value = []
   dialogVisible.value = true
 }
 
@@ -251,7 +267,21 @@ const openEditDialog = async (noticeId: number) => {
     ...createDefaultNoticeForm(),
     ...result.data,
     groupIds: Array.isArray(result.data.groupIds) ? result.data.groupIds.map((item) => Number(item)) : [],
+    targetUserIds: Array.isArray(result.data.targetUserIds)
+      ? result.data.targetUserIds.map((item) => Number(item))
+      : [],
   }
+  // 指定成员展示信息由后端 targetUsers 回显；缺失时退回仅按 targetUserIds 重建（仅含 userId）
+  const remoteTargets = result.data.targetUsers ?? []
+  targetMembers.value = remoteTargets.length
+    ? remoteTargets.map((item) => ({
+        userId: Number(item.userId),
+        username: item.username,
+        nickName: item.nickName,
+        phoneNumber: item.phoneNumber,
+        status: item.status,
+      }))
+    : (formModel.value.targetUserIds ?? []).map((userId) => ({ userId }))
   dialogVisible.value = true
 }
 
@@ -285,6 +315,9 @@ const handleFormModelUpdate = (nextValue: Record<string, unknown>) => {
     isTop: Number(nextValue.isTop ?? formModel.value.isTop),
     needConfirm: Number(nextValue.needConfirm ?? formModel.value.needConfirm),
     groupIds: Array.isArray(nextValue.groupIds) ? (nextValue.groupIds as number[]) : formModel.value.groupIds,
+    // 指定成员主键集合由本地 targetMembers 派生（见 handleSubmitForm），此处仅作字段保护，
+    // 不接受公共表单回传覆盖，避免 custom 字段在 update 时被清空。
+    targetUserIds: formModel.value.targetUserIds,
   }
 }
 
@@ -321,6 +354,9 @@ const handleSubmitForm = async () => {
       remark: formModel.value.remark?.trim() || '',
       // 全员范围下不携带分组关联，避免脏数据
       groupIds: formModel.value.publishScope === 'GROUP' ? formModel.value.groupIds ?? [] : [],
+      // 指定成员范围下携带本地已选成员的 userId 集合；其余范围清空，避免脏数据
+      targetUserIds:
+        formModel.value.publishScope === 'USER' ? targetMembers.value.map((item) => item.userId) : [],
     }
 
     if (dialogMode.value === 'create') {
@@ -400,6 +436,49 @@ const handleDeleteNotice = async (noticeId: number) => {
 onMounted(async () => {
   await Promise.all([fetchGroupOptions(), fetchPage()])
 })
+
+/**
+ * 已选指定成员的 userId 集合，传给 GroupMemberAddDialog 控制"已加入"禁用态，避免重复加入。
+ */
+const targetUserIdSet = computed(() => new Set(targetMembers.value.map((item) => item.userId)))
+
+/**
+ * 方法效果：
+ * 打开"添加成员"子弹窗，复用通知分组模块的 GroupMemberAddDialog 交互。
+ */
+const handleOpenTargetUserAddDialog = () => {
+  targetUserAddDialog.value?.open()
+}
+
+/**
+ * 方法效果：
+ * 接收 GroupMemberAddDialog 抛回的待加入用户，乐观追加到本地已选成员集合。
+ * 参数：
+ * - `user`：子弹窗选中的用户记录（含 userId/nickName/username/phoneNumber/status）。
+ */
+const handleAddTargetUser = (user: SysUserFormData) => {
+  const userId = Number(user.userId)
+  if (targetUserIdSet.value.has(userId)) {
+    return
+  }
+  targetMembers.value.push({
+    userId,
+    username: user.username,
+    nickName: user.nickName,
+    phoneNumber: user.phoneNumber,
+    status: user.status,
+  })
+}
+
+/**
+ * 方法效果：
+ * 移除指定成员，乐观从本地已选集合删除。
+ * 参数：
+ * - `userId`：待移除用户主键。
+ */
+const handleRemoveTargetUser = (userId: number) => {
+  targetMembers.value = targetMembers.value.filter((item) => item.userId !== userId)
+}
 </script>
 
 <template>
@@ -461,6 +540,34 @@ onMounted(async () => {
             />
           </ElSelect>
         </template>
+        <template #field-targetUserIds>
+          <!-- 指定成员控件：上方操作条 + 下方已选成员 tag 列表，复用分组模块的添加成员子弹窗 -->
+          <div class="notice-target-user">
+            <div class="notice-target-user__bar">
+              <ElButton type="primary" size="small" @click="handleOpenTargetUserAddDialog">
+                添加成员
+              </ElButton>
+              <span class="notice-target-user__hint">
+                已选 {{ targetMembers.length }} 人{{ targetMembers.length === 0 ? '，请添加至少一名成员' : '' }}
+              </span>
+            </div>
+            <div v-if="targetMembers.length > 0" class="notice-target-user__tags">
+              <ElTag
+                v-for="item in targetMembers"
+                :key="item.userId"
+                closable
+                :type="Number(item.status) === 0 ? 'info' : 'success'"
+                @close="handleRemoveTargetUser(item.userId)"
+              >
+                {{ item.nickName || item.username || `用户${item.userId}` }}
+                <span v-if="item.username && item.nickName" class="notice-target-user__username">
+                  ({{ item.username }})
+                </span>
+              </ElTag>
+            </div>
+            <ElEmpty v-else description="尚未添加指定成员" :image-size="48" />
+          </div>
+        </template>
       </SharedTablePanel>
     </BaseCard>
 
@@ -470,6 +577,13 @@ onMounted(async () => {
       :notice="detailRecord"
       @update:visible="detailVisible = $event"
     />
+
+    <!-- 指定成员添加子弹窗：复用通知分组模块的搜索+加入交互 -->
+    <GroupMemberAddDialog
+      ref="targetUserAddDialog"
+      :exclude-user-ids="targetUserIdSet"
+      @add="handleAddTargetUser"
+    />
   </section>
 </template>
 
@@ -477,5 +591,34 @@ onMounted(async () => {
 .system-notice-view {
   display: grid;
   gap: 18px;
+}
+
+.notice-target-user {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.notice-target-user__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notice-target-user__hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.notice-target-user__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notice-target-user__username {
+  color: var(--el-text-color-secondary);
+  margin-left: 2px;
 }
 </style>

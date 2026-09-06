@@ -64,4 +64,31 @@ public class TokenService {
         return redisCache.getObjectCache(getUsernameByJwt(token), UserInfo.class);
     }
 
+    /**
+     * 按登录账号直接读取登录态缓存（不经过 JWT 解码）。
+     * 供在线用户列表等场景读取展示信息；缓存不存在（未登录/已过期/被下线）返回 null。
+     *
+     * @param username 登录账号（缓存 key）
+     * @return 缓存中的 UserInfo；不存在返回 null
+     */
+    public UserInfo getUserInfoByUsername(String username) {
+        if (username == null || username.isEmpty()) {
+            return null;
+        }
+        return redisCache.getObjectCache(username, UserInfo.class);
+    }
+
+    /**
+     * 删除指定用户的登录态缓存（退出登录 / 强制下线用）。
+     * 删除后该用户携带旧 token 的下一次请求将无法通过 TokenVerifyFilter 校验（401 → 前端跳登录）。
+     *
+     * @param username 登录账号（缓存 key）
+     */
+    public void deleteToken(String username) {
+        if (username == null || username.isEmpty()) {
+            return;
+        }
+        redisCache.deleteCache(username);
+    }
+
 }

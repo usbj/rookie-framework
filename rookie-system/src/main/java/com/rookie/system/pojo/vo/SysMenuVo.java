@@ -23,6 +23,9 @@ public class SysMenuVo {
 
     private String icon;
 
+    /** 排序号（越小越靠前，同一父级内生效；相同则按 menu_id 兜底） */
+    private Integer sort;
+
     private List<SysMenuVo> sonMenus;
 
     private Integer status;
@@ -117,6 +120,14 @@ public class SysMenuVo {
 
     public void setIcon(String icon) {
         this.icon = icon;
+    }
+
+    public Integer getSort() {
+        return sort;
+    }
+
+    public void setSort(Integer sort) {
+        this.sort = sort;
     }
 
     public List<SysMenuVo> getSonMenus() {

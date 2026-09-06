@@ -8,6 +8,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElButton, ElMessage, ElMessageBox } from 'element-plus'
 import {
+  clearDictDataCacheApi,
   createSysDictApi,
   deleteSysDictApi,
   getSysDictDetailApi,
@@ -322,6 +323,9 @@ const handleRefreshDictCache = async () => {
   dictRefreshLoading.value = true
 
   try {
+    // 后端 getSysDictDataByDictKey 走 Redis 缓存命中即返回，先调 clearDictDataCacheApi 清后端缓存，
+    // 再清前端并 initializeDictionaries(true) 重拉，下一次按 dictKey 取值才会强制重新查库。
+    await clearDictDataCacheApi()
     dictStore.clearDictCache()
     await dictStore.initializeDictionaries(true)
     ElMessage.success('字典缓存刷新成功')

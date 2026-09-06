@@ -138,4 +138,12 @@
         where user_id = #{userId}
     </update>
 
+    <update id="updateSysUserAvatar" parameterType="com.rookie.common.pojo.entity.SysUser">
+        update sys_user
+        set avatar = #{avatar},
+            update_by = #{updateBy},
+            update_time = now()
+        where user_id = #{userId}
+    </update>
+
 </mapper>

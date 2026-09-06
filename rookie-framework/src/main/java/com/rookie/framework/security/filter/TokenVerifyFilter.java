@@ -3,6 +3,7 @@ package com.rookie.framework.security.filter;
 import com.rookie.common.cache.RedisCache;
 import com.rookie.framework.security.service.TokenService;
 import com.rookie.framework.security.pojo.UserInfo;
+import com.rookie.framework.service.OnlineUserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +30,9 @@ public class TokenVerifyFilter extends OncePerRequestFilter {
     @Autowired
     RedisCache redisCache;
 
+    @Autowired
+    OnlineUserService onlineUserService;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         UserInfo userInfo = tokenService.getUserInfoByToken(request.getHeader("Token"));
@@ -41,6 +45,12 @@ public class TokenVerifyFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(userInfo,null,userInfo.getAuthorities());
             authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            // 在线统计：校验通过即视为活跃，写入在线集合（内部容错，绝不干扰鉴权主流程）
+            try {
+                onlineUserService.recordActivity(userInfo.getUsername());
+            } catch (Exception ignore) {
+                // 在线统计失败不影响请求继续（Redis 抖动时降级为不计入在线）
+            }
         }
         filterChain.doFilter(request,response);
     }

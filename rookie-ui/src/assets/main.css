@@ -87,9 +87,9 @@
   background: var(--rookie-table-stripe-bg) !important;
 }
 
-.el-table .el-table__body tr:hover > td.el-table__cell {
-  background: var(--rookie-hover-bg) !important;
-}
+/*.el-table .el-table__body tr:hover > td.el-table__cell {*/
+/*  background: var(--rookie-hover-bg) !important;*/
+/*}*/
 
 .el-table td.el-table__cell,
 .el-table th.el-table__cell,
@@ -140,14 +140,21 @@
   color: var(--rookie-text) !important;
 }
 
+/* 错误提示用绝对定位脱离文档流：校验出现/消失都不改变 form-item 高度与 margin，
+   下方输入框位置始终不跳动。文字落在 form-item 默认 18px 下间隙内垂直居中
+   （间隙 18px，行高 12px，上下各留 3px），不贴当前输入框、不压下一行输入框。 */
 .el-form-item__error {
+  position: absolute;
+  top: 100%;
+  left: 0;
   color: var(--rookie-danger) !important;
-  background: color-mix(in srgb, var(--rookie-danger) 10%, var(--rookie-card-bg)) !important;
-  border: 1px solid color-mix(in srgb, var(--rookie-danger) 22%, var(--rookie-border)) !important;
-  border-radius: 10px !important;
-  padding: 4px 8px !important;
-  line-height: 1.35 !important;
-  box-shadow: 0 8px 20px rgba(209, 67, 67, 0.08);
+  font-size: var(--rookie-font-size-xs) !important;
+  line-height: 12px !important;
+  padding-top: 3px !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .el-form-item.is-error .el-input__wrapper,

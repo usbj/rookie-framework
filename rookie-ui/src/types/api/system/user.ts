@@ -21,6 +21,8 @@ export interface SysUserProfile {
   nickName: string
   phoneNumber: string
   sex: string
+  /** 头像存储名（上传路径 avatar/ 子目录下的文件名；无头像为 undefined，前端显示字母占位） */
+  avatar?: string
   status: number
   createTime?: string
   userRole: SysRoleRecord[]
@@ -31,7 +33,17 @@ export interface UpdatePersonalProfilePayload {
   nickName: string
   phoneNumber: string
   sex: string
-  password?: string
+}
+
+/**
+ * 修改密码请求体，与后端 ModifyPasswordBody 字段保持一致。
+ * 修改密码走独立接口 PUT /person/password，与资料编辑（PUT /person）分离。
+ */
+export interface ModifyPasswordRequestData {
+  /** 原密码（必填，后端 BCrypt 校验） */
+  oldPassword: string
+  /** 新密码（必填，6-20 位） */
+  newPassword: string
 }
 
 /**

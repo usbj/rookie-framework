@@ -1,12 +1,13 @@
 /**
  * 文件作用：
  * 集中管理当前登录用户相关的后端接口，
- * 包括个人信息读取/修改、当前用户路由树，以及系统模块下的用户管理接口。
+ * 包括个人信息读取/修改、个人头像上传/读取、当前用户路由树，以及系统模块下的用户管理接口。
  */
-import { del, get, getPage, post, put } from '@/utils/http'
+import { del, get, getBlob, getPage, post, put } from '@/utils/http'
 import type { ApiResult } from '@/types/api/system/common'
 import type { SysMenuRecord } from '@/types/api/system/menu'
 import type {
+  ModifyPasswordRequestData,
   SysUserFormData,
   SysUserListQuery,
   SysUserPageResult,
@@ -34,6 +35,46 @@ export const getPersonalProfileApi = () => get<ApiResult<SysUserProfile>>('/pers
  */
 export const updatePersonalProfileApi = (data: UpdatePersonalProfilePayload) =>
   put<ApiResult<boolean>, UpdatePersonalProfilePayload>('/person', data)
+
+/**
+ * 方法效果：
+ * 修改当前登录用户密码（独立接口，与资料编辑分离）。
+ * 参数：
+ * - `data`：修改密码请求体（原密码 + 新密码）。
+ * 返回值：
+ * - 后端 Result 包裹的布尔结果。
+ */
+export const modifyPersonalPasswordApi = (data: ModifyPasswordRequestData) =>
+  put<ApiResult<boolean>, ModifyPasswordRequestData>('/person/password', data)
+
+/**
+ * 方法效果：
+ * 上传当前登录用户的头像（multipart/form-data，字段名 file）。
+ * 参数：
+ * - `file`：头像图片文件（png/jpg/jpeg/gif/webp，≤2MB，后端校验）。
+ * 返回值：
+ * - 后端 Result 包裹的新头像存储名。
+ * 说明：
+ * - 实例默认 `Content-Type: application/json` 会导致 axios 把 FormData JSON 序列化，
+ *   必须显式置 undefined 让浏览器自动设置带 boundary 的 multipart 头（同 uploadFileApi）。
+ */
+export const uploadPersonalAvatarApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return post<ApiResult<string>>('/person/avatar', formData, {
+    headers: { 'Content-Type': undefined },
+  })
+}
+
+/**
+ * 方法效果：
+ * 以 blob 方式读取当前登录用户的头像图片流。
+ * 参数：
+ * - 无。
+ * 返回值：
+ * - 头像图片二进制数据（Blob），由调用方转 objectURL 展示。
+ */
+export const fetchPersonalAvatarApi = () => getBlob<Blob>('/person/avatar')
 
 /**
  * 方法效果：

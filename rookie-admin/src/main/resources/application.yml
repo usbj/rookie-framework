@@ -15,6 +15,17 @@ spring:
     redis:
       #      host: 192.168.88.132
       port: 6379
+  # 文件上传大小限制（默认 1MB 过小，按需放宽；头像另有 2MB 上限在服务层校验）
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  # Jackson 全局日期格式化：所有 java.util.Date 统一序列化为 yyyy-MM-dd HH:mm:ss
+  # 时区设为东八区，避免按 UTC 输出导致时间偏移 8 小时。
+  # 前端拿到即为格式化字符串，按需用 formatDateTime/formatDate 截断展示。
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
 logging:
   level:
     com.rookie: debug
@@ -50,3 +61,19 @@ redis:
   base-key: 'rookie:framework:'
   #单位默认为分钟
   expire-time: 30
+
+# 定时任务调度白名单：允许被 sys_job 调度的 Spring Bean 包前缀（rookie SysJobScheduler 安全边界）
+# 默认 com.rookie.system.task；二开项目可追加自身任务包前缀
+# 注意：@Value 注入 List<String> 只认逗号分隔字符串，不认 YAML 列表语法（- ），故必须用逗号分隔单行写法。
+task:
+  bean-package-prefixes: com.rookie.system.task
+
+# 文件上传配置
+# upload.path：上传根路径（本地路径，可配置；支持相对路径，相对应用工作目录解析；
+#              修改后需重启后端生效）。文件按「根路径/年/月/日」分层存储，
+#              用户头像落在根路径下的 avatar/年/月/日 子目录。
+# system-name：系统名称，作为上传文件名的前缀（文件名 = 系统名称 + 年月日 + 毫秒时间戳 + 扩展名）
+rookie:
+  system-name: rookie
+  upload:
+    path: ./upload

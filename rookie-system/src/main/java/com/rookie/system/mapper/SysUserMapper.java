@@ -31,4 +31,10 @@ public interface SysUserMapper {
 
     Boolean resetSysUserPassword(SysUser sysUser);
 
+    /**
+     * 仅更新头像字段（独立于 editUserInfo 白名单，避免资料编辑路径误改头像）。
+     * 由头像上传服务调用，updateBy 必须显式填充（update_by 为 NOT NULL 列）。
+     */
+    Boolean updateSysUserAvatar(SysUser sysUser);
+
 }
